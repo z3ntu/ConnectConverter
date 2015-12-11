@@ -56,14 +56,8 @@ def main():
         print(ret.get("message", "Unknown error."))
         exit("Ending the program.")
 
-    if ret['type'] == "Single":
+    if ret['type'] in ["Single", "EP", "Album"]:
         print("single")
-        title = ret['title']
-        artist = ret['renderedArtists']
-        cover = ret['coverArt']
-        catalog = ret['catalogId']
-    elif ret['type'] == "EP":
-        print("ep")
         title = ret['title']
         artist = ret['renderedArtists']
         cover = ret['coverArt']
