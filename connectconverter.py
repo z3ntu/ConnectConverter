@@ -10,7 +10,8 @@ import subprocess
 import sys
 import zipfile
 from subprocess import DEVNULL
-# from mutagen
+from mutagen.flac import FLAC
+from mutagen.mp3 import MP3
 
 import requests
 
@@ -25,10 +26,13 @@ SIGNIN_URL = "https://connect.monstercat.com/signin"
 COVER_ART = "https://connect.monstercat.com/img/labels/monstercat/albums/{0}"
 DOWNLOAD_URL = "https://connect.monstercat.com/album/{0}/download{1}"
 ALBUM_INFO_URL = "https://connect.monstercat.com/album/{0}"
+TRACKS_URL = "https://connect.monstercat.com/tracks"
 
 NAMING_FORMAT = "{0} - {1}{2}"  # 0=Artist, 1=Title, 2=File-Extension (should contain a dot);
 
 to_default = ["FLAC", "MP3_320"]
+
+tracks = []
 
 
 def main():
@@ -51,6 +55,9 @@ def main():
         sign_in(session)
         save_cookies(session.cookies, COOKIE_FILE)
 
+    global tracks
+    tracks = load_tracks(session)
+
     ret = get_album_info(album_id, session)
     if ret.get("error", ".") != ".":
         print(ret.get("message", "Unknown error."))
@@ -62,8 +69,12 @@ def main():
         artist = ret['renderedArtists']
         cover = ret['coverArt']
         catalog = ret['catalogId']
+        release_date = ret['releaseDate']
     else:
         exit("Unknown type (e.g. Single, EP). Ending the program.")
+
+    albums = get_song_info_to_album(album_id, session)
+    print("debug")
 
     answer = input("We will now download '" + title + "' by '" + artist + "'. Ok [Y/n]? ")
     if answer in ['N', 'n']:
@@ -80,6 +91,7 @@ def main():
     if len(dirnames) != 1:
         print(dirnames)
         exit("Error while extracting...")
+
     files = glob.glob(EXTRACT_PATH + dirnames[0] + "/*.wav")
     for file in files:
         converted_list = convert(file, to_default)
@@ -91,7 +103,19 @@ def main():
             newfilename = path + "/" + NAMING_FORMAT.format(artist, title, os.path.splitext(converted)[1])
             os.rename(converted, newfilename)
             print("New file: " + newfilename)
-            # TODO: Fill metatags
+            if os.path.splitext(converted)[1] == ".flac":
+                audio = FLAC(newfilename)
+                audio["title"] = title
+                audio["artist"] = artist
+                audio["album"] = ""  # TODO: use actual album
+                audio["year"] = 2015  # TODO: use actual release year
+                print(audio)
+                audio.save()
+            elif os.path.splitext(converted)[1] == ".mp3":  # TODO: How does this work?!
+                audio = MP3(newfilename)
+                audio["title"] = title
+                print(audio)
+                audio.save()
 
             # try:
             #     tags = ID3(filename)
@@ -128,6 +152,22 @@ def convert(filename, to):
             exit(1)
         converted.append(base + ".flac")
     return converted
+
+
+def load_tracks(session):
+    print("Getting the tracks...")
+    tracks_raw = session.get(TRACKS_URL)
+    # PARSE RESPONSE INTO JSON
+    return json.loads(tracks_raw.text)
+
+
+def get_song_info_to_album(album_id, session):
+    ret = []
+    for track in tracks:
+        for album in track['albums']:
+            if album['albumId'] == album_id:
+                ret.append(album)
+    return ret
 
 
 def get_album_info(album_id, session):
@@ -265,5 +305,11 @@ def create_directories():
     os.makedirs(EXTRACT_PATH, exist_ok=True)
 
 
+def test():
+    audio = MP3("/home/luca/Music/Tristam - The Vine.mp3")
+    audio["APIC"] = None
+    print(audio.info)
+
 if __name__ == '__main__':
     main()
+    # test()
